@@ -1,0 +1,17 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    exif (2.2.0)
+    exifr (1.3.5)
+    slop (4.6.2)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  exif
+  exifr
+  slop
+
+BUNDLED WITH
+   1.16.3
