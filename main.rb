@@ -1,13 +1,13 @@
 #!/usr/bin/env ruby
 
+require 'byebug'
 require 'fileutils'
 require 'slop'
+require 'mediainfo'
 require 'exifr/jpeg'
 
 module PhotoOrganizer
   class CLI
-    EXTENSIONS = %w[jpg]
-
     def run
       execution = []
       files.each do |path|
@@ -25,9 +25,9 @@ module PhotoOrganizer
     end
 
     def stack_changes_for(media)
-      if cli['exif-to-file-timestamp']
-        media.track_change(:created_at, media.exif_shot_at)
-        media.track_change(:modified_at, media.exif_shot_at)
+      if cli['metadata-to-file-timestamp']
+        media.track_change(:created_at, media.metadata_shot_at)
+        media.track_change(:modified_at, media.metadata_shot_at)
       end
     end
 
@@ -38,9 +38,9 @@ module PhotoOrganizer
         USAGE
 
         o.separator "Options:"
-        o.string '--extensions', 'Accepted file extensions', default: EXTENSIONS.join(',')
-        o.bool '--exif-to-file-timestamp', 'Copy EXIF shot timestamp to file created/modified timestamp'
-        o.bool '--exif-to-file-prefix', 'Copy EXIF shot timestamp to file name as a prefix. E.g. YYYY-MM-DD_HH-MM-SS_<current name>'
+        o.string '--extensions', 'Accepted file extensions', default: FileFormat::EXTENSIONS.join(',')
+        o.bool '--metadata-to-file-timestamp', 'Copy image/video shot timestamp to file created/modified timestamp'
+        o.bool '--metadata-to-file-prefix', 'Copy image/video shot timestamp to file name as a prefix. E.g. YYYY-MM-DD_HH-MM-SS_<current name>'
         o.bool '-p', '--preview', 'Simulate the execution', default: false
         o.bool '-v', '--verbose', 'Display unmodified as well', default: false
         o.on '--help', 'Shows help' do
@@ -86,8 +86,8 @@ module PhotoOrganizer
       file.mtime
     end
 
-    def exif_shot_at
-      exif.date_time
+    def metadata_shot_at
+      metadata_image_shot_at || metadata_video_shot_at
     end
 
     def inspect
@@ -98,6 +98,20 @@ module PhotoOrganizer
     end
 
     private
+
+    def metadata_image_shot_at
+      return unless format.image?
+      image_info.date_time
+    end
+
+    def metadata_video_shot_at
+      return unless format.video?
+      video_info.general.extra.com_apple_quicktime_creationdate
+    end
+
+    def format
+      @format ||= FileFormat.new(File.extname(path)[1..-1])
+    end
 
     def change_created_at
       return unless (new = changes[:created_at].last)
@@ -114,8 +128,26 @@ module PhotoOrganizer
       @file ||= File.new(path)
     end
 
-    def exif
-      @exif ||= EXIFR::JPEG.new(path)
+    def image_info
+      @image_info ||= EXIFR::JPEG.new(path)
+    end
+
+    def video_info
+      @video_info ||= MediaInfo.from(path)
+    end
+  end
+
+  class FileFormat < Struct.new(:ext)
+    IMAGE_EXTENSIONS = %w[jpg jpeg]
+    VIDEO_EXTENSIONS = %w[mov]
+    EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS
+
+    def image?
+      IMAGE_EXTENSIONS.include? ext
+    end
+
+    def video?
+      VIDEO_EXTENSIONS.include? ext
     end
   end
 end
